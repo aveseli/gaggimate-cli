@@ -2,11 +2,61 @@
 
 This guide explains how an AI agent should use `gaggimate-cli` to analyze espresso shots, manage profiles, and help users dial in their coffee.
 
-## Prerequisites
+## Setup
+
+### Install Skills and Prompts
+
+```bash
+gaggimate-cli install --harness pi          # Global install
+gaggimate-cli install --harness pi --local  # Project-local
+gaggimate-cli install --harness claude      # Claude Desktop
+```
+
+This installs:
+- **6 skills** (gaggimate-core, gaggimate-diagnose, gaggimate-feedback, gaggimate-profiles, gaggimate-knowledge, gaggimate-new-coffee)
+- **4 prompt templates** (Pi only: /gaggimate-analyze-shot, /gaggimate-dial-in, /gaggimate-new-coffee, /gaggimate-shot-feedback)
+
+### Prerequisites
 
 - The CLI is installed and accessible (check `gaggimate version`)
 - The Gaggimate device is on the same network as the CLI
 - Set `GAGGIMATE_HOST` env var if not using `gaggimate.local`
+
+## Quick Reference
+
+```bash
+gaggimate shots list                       # Recent shots
+gaggimate shots analyze <ID>               # Analyze with diagnostics
+gaggimate shots analyze <ID> --detail per_phase   # Deeper analysis
+gaggimate profiles list                    # List profiles
+gaggimate profiles select <ID>             # Select active profile
+gaggimate notes get <ID>                   # Get shot notes
+gaggimate notes set <ID> --rating 4 --notes "..."  # Save notes
+```
+
+## Skills
+
+Skills are loaded on-demand when espresso topics are detected:
+
+| Skill | Purpose |
+|-------|---------|
+| gaggimate-core | Barista persona + workflow overview (entry point) |
+| gaggimate-diagnose | Shot telemetry analysis with taste correlation |
+| gaggimate-feedback | Shot feedback loop: gather, analyze, record, recommend |
+| gaggimate-profiles | Profile creation with phase/pump/transition guidance |
+| gaggimate-knowledge | Espresso knowledge Q&A (pressure, extraction, tasting) |
+| gaggimate-new-coffee | Research beans, recommend parameters, upload profile |
+
+## Prompt Templates (Pi only)
+
+Type `/name` in the editor to invoke:
+
+| Template | Description |
+|----------|-------------|
+| /gaggimate-analyze-shot | Analyze a shot with full diagnostics |
+| /gaggimate-dial-in | Start iterative dialing workflow |
+| /gaggimate-new-coffee | Research and set up a new coffee |
+| /gaggimate-shot-feedback | Record tasting feedback |
 
 ## Core Workflow: Analyzing a Shot
 
