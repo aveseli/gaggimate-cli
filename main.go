@@ -15,12 +15,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/adnan/gaggimate-cli/internal/api"
 	"github.com/adnan/gaggimate-cli/internal/diag"
+	"github.com/adnan/gaggimate-cli/internal/install"
 )
 
 const version = "0.1.0"
@@ -53,6 +55,8 @@ func main() {
 		cmdNotes(wsClient, args)
 	case "diagnose":
 		cmdDiagnose(httpClient, host)
+	case "install":
+		cmdInstall(args)
 	case "version", "--version", "-v":
 		fmt.Printf("gaggimate-cli %s\n", version)
 	case "help", "--help", "-h":
@@ -83,6 +87,7 @@ COMMANDS
     notes get <SHOT_ID>                    Get shot notes
     notes set <SHOT_ID> [flags]            Set shot notes
     diagnose                               Check device connectivity
+    install --harness <NAME> [flags]       Install skills & instructions for a harness
     version                                Print version
 
 ANALYSIS DETAIL LEVELS (--detail)
@@ -123,6 +128,58 @@ EXAMPLES
     gaggimate-cli notes get 196
     gaggimate-cli notes set 196 --rating 4 --notes "sweet, balanced" --balance balanced
     gaggimate-cli diagnose
+
+INSTALL
+    Installs espresso agent skills and prompt templates into a coding
+    harness so the AI agent can help with Gaggimate shot analysis, profile
+    management, and espresso dialing.
+
+    What gets installed:
+
+      Skills (loaded on-demand when espresso topic detected):
+        gaggimate-core          Barista persona + workflow overview
+        gaggimate-diagnose      Shot telemetry analysis with taste correlation
+        gaggimate-feedback      Shot feedback loop: gather, analyze, record, recommend
+        gaggimate-profiles      Profile creation with phase/pump/transition guidance
+        gaggimate-knowledge     Espresso knowledge Q&A (pressure, extraction, tasting)
+        gaggimate-new-coffee    Research beans, recommend parameters, upload profile
+
+      Prompt templates (Pi only — type /name to invoke):
+        /gaggimate-analyze-shot    Analyze a shot with full diagnostics
+        /gaggimate-dial-in         Start iterative dialing workflow
+        /gaggimate-new-coffee      Research and set up a new coffee
+        /gaggimate-shot-feedback   Record tasting feedback
+
+    Where files are installed (--harness selects the target):
+
+      Harness   Skills directory                       Prompts directory
+      -------   ------------------------------         -----------------------
+      pi        ~/.pi/agent/skills/<name>/SKILL.md     ~/.pi/agent/prompts/*.md
+      claude    ~/.claude/skills/<name>/SKILL.md       (not supported)
+      codex     ~/.codex/skills/<name>/SKILL.md        (not supported)
+      cursor    ~/.cursor/skills/<name>/SKILL.md       (not supported)
+
+      With --local, paths are relative to the current directory instead:
+        .pi/skills/   .pi/prompts/
+        .claude/skills/
+        .codex/skills/
+        .cursor/skills/
+
+    Examples:
+      gaggimate-cli install --harness pi                # install globally for Pi
+      gaggimate-cli install --harness pi --local        # install to .pi/ in this project
+      gaggimate-cli install --harness claude            # install for Claude Desktop
+      gaggimate-cli install --harness pi --skills-only  # skip prompt templates
+
+    After installing, restart your agent (or start a new session) to load
+    the new skills. Skills are loaded on-demand — the agent will use them
+    when it detects espresso-related topics.
+
+    Flags:
+      --harness NAME          Target harness: pi, claude, codex, cursor (required)
+      --local                 Install to project directory instead of global config
+      --skills-only           Only install skills, skip prompt templates
+      --instructions-only     Only install prompt templates, skip skills
 `)
 }
 
@@ -355,6 +412,108 @@ func cmdNotes(ws *api.WebSocketClient, args []string) {
 		fmt.Fprintf(os.Stderr, "Unknown notes subcommand: %s\n", sub)
 		os.Exit(1)
 	}
+}
+
+// ─── Install ──────────────────────────────────────────────────────
+
+func cmdInstall(args []string) {
+	harness := ""
+	projectLocal := false
+	skillsOnly := false
+	instructionsOnly := false
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--harness":
+			if i+1 < len(args) {
+				harness = args[i+1]
+				i++
+			}
+		case "--local":
+			projectLocal = true
+		case "--skills-only":
+			skillsOnly = true
+		case "--instructions-only":
+			instructionsOnly = true
+		}
+	}
+
+	if harness == "" {
+		fmt.Fprintln(os.Stderr, "Error: --harness is required")
+		fmt.Fprintln(os.Stderr, "Available harnesses: pi, claude, codex, cursor")
+		os.Exit(1)
+	}
+
+	// Locate source files relative to the binary/source
+	exePath, _ := os.Executable()
+	exeDir := filepath.Dir(exePath)
+
+	// Try to find source relative to working directory first, then exe directory
+	skillsSrc := ""
+	promptsSrc := ""
+
+	searchDirs := []string{".", exeDir}
+	for _, dir := range searchDirs {
+		if skillsSrc == "" {
+			path := filepath.Join(dir, "agent-skills")
+			if info, err := os.Stat(path); err == nil && info.IsDir() {
+				skillsSrc = path
+			}
+		}
+		if promptsSrc == "" {
+			path := filepath.Join(dir, "agent-prompts")
+			if info, err := os.Stat(path); err == nil && info.IsDir() {
+				promptsSrc = path
+			}
+		}
+	}
+
+	inst := &install.Install{
+		HarnessName:  harness,
+		ProjectLocal: projectLocal,
+		SkillsDir:    skillsSrc,
+		PromptsDir:   promptsSrc,
+	}
+
+	if skillsOnly {
+		inst.PromptsDir = ""
+	}
+	if instructionsOnly {
+		inst.SkillsDir = ""
+	}
+
+	if inst.SkillsDir == "" && inst.PromptsDir == "" {
+		fatal("could not find agent-skills/ or agent-prompts/ directory.\n" +
+			"Run this command from the gaggimate-cli source directory, or ensure\n" +
+			"the binary is in the same directory as agent-skills/ and agent-prompts/.")
+	}
+
+	result, err := inst.Run()
+	if err != nil {
+		fatal("%v", err)
+	}
+
+	// Print summary
+	harnessInfo := install.Harnesses[harness]
+	fmt.Printf("Installed gaggimate skills into %s (%s)\n\n", harnessInfo.Name, harnessInfo.Description)
+
+	if len(result.Skills) > 0 {
+		fmt.Printf("Skills installed to: %s\n", result.SkillsDir)
+		for _, skill := range result.Skills {
+			fmt.Printf("  ✓ %s\n", skill)
+		}
+		fmt.Println()
+	}
+
+	if len(result.PromptTemplates) > 0 {
+		fmt.Printf("Prompt templates installed to: %s\n", result.PromptsDir)
+		for _, p := range result.PromptTemplates {
+			fmt.Printf("  ✓ /%s\n", strings.TrimSuffix(p, ".md"))
+		}
+		fmt.Println()
+	}
+
+	fmt.Println("Restart your agent to load the new skills and prompts.")
 }
 
 // ─── Diagnose ─────────────────────────────────────────────────────
