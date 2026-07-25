@@ -16,6 +16,18 @@ This installs:
 - **6 skills** (gaggimate-core, gaggimate-diagnose, gaggimate-feedback, gaggimate-profiles, gaggimate-knowledge, gaggimate-new-coffee)
 - **4 prompt templates** (Pi only: /gaggimate-analyze-shot, /gaggimate-dial-in, /gaggimate-new-coffee, /gaggimate-shot-feedback)
 
+### Uninstall Skills and Prompts
+
+```bash
+gaggimate-cli uninstall --harness pi          # Uninstall globally from Pi
+gaggimate-cli uninstall --harness pi --local  # Uninstall from project-local
+gaggimate-cli uninstall --harness pi --dry-run # Preview what would be removed
+```
+
+Uninstall only removes `gaggimate-*` items — other skills and prompts are untouched. You will be shown a list of items to remove and asked to confirm before anything is deleted.
+- **6 skills** (gaggimate-core, gaggimate-diagnose, gaggimate-feedback, gaggimate-profiles, gaggimate-knowledge, gaggimate-new-coffee)
+- **4 prompt templates** (Pi only: /gaggimate-analyze-shot, /gaggimate-dial-in, /gaggimate-new-coffee, /gaggimate-shot-feedback)
+
 ### Prerequisites
 
 - The CLI is installed and accessible (check `gaggimate version`)

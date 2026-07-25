@@ -233,6 +233,158 @@ func copyDir(src, dst string) error {
 	})
 }
 
+// ─── Uninstall ───────────────────────────────────────────────────
+
+// Uninstall removes previously installed skills and prompt templates.
+type Uninstall struct {
+	HarnessName  string
+	ProjectLocal bool
+	DryRun       bool
+	Confirm      func(what []string) bool // called with list of paths to remove; return true to proceed
+}
+
+// UninstallResult describes what was removed.
+type UninstallResult struct {
+	Harness           string
+	Scope             string
+	SkillsDir         string
+	PromptsDir        string
+	SkillsRemoved     []string
+	PromptsRemoved    []string
+}
+
+// Run performs the uninstall. It will not remove anything without confirmation.
+func (u *Uninstall) Run() (*UninstallResult, error) {
+	harness, ok := Harnesses[u.HarnessName]
+	if !ok {
+		available := make([]string, 0, len(Harnesses))
+		for k := range Harnesses {
+			available = append(available, k)
+		}
+		return nil, fmt.Errorf("unknown harness %q (available: %s)", u.HarnessName, strings.Join(available, ", "))
+	}
+
+	home, _ := os.UserHomeDir()
+	cwd, _ := os.Getwd()
+
+	skillsDir := harness.SkillsDir(home, u.ProjectLocal)
+	promptsDir := ""
+	if harness.PromptsDir != nil {
+		promptsDir = harness.PromptsDir(home, u.ProjectLocal)
+	}
+
+	// Make relative paths relative to cwd
+	if !filepath.IsAbs(skillsDir) {
+		skillsDir = filepath.Join(cwd, skillsDir)
+	}
+	if promptsDir != "" && !filepath.IsAbs(promptsDir) {
+		promptsDir = filepath.Join(cwd, promptsDir)
+	}
+
+	result := &UninstallResult{
+		Harness:    harness.Name,
+		Scope:      "global",
+		SkillsDir:  skillsDir,
+		PromptsDir: promptsDir,
+	}
+	if u.ProjectLocal {
+		result.Scope = "project-local"
+	}
+
+	// Discover installed gaggimate skills
+	skillsToRemove := discoverGaggimateSkills(skillsDir)
+	promptsToRemove := discoverGaggimatePrompts(promptsDir)
+
+	// Build list of paths for confirmation
+	var paths []string
+	for _, s := range skillsToRemove {
+		paths = append(paths, filepath.Join(skillsDir, s))
+	}
+	for _, p := range promptsToRemove {
+		paths = append(paths, filepath.Join(promptsDir, p))
+	}
+
+	if len(paths) == 0 {
+		return result, nil
+	}
+
+	// Ask for confirmation
+	if u.Confirm != nil && !u.Confirm(paths) {
+		return nil, fmt.Errorf("uninstall cancelled")
+	}
+
+	if u.DryRun {
+		result.SkillsRemoved = skillsToRemove
+		result.PromptsRemoved = promptsToRemove
+		return result, nil
+	}
+
+	// Remove skills
+	for _, skill := range skillsToRemove {
+		path := filepath.Join(skillsDir, skill)
+		if err := os.RemoveAll(path); err != nil {
+			return nil, fmt.Errorf("removing skill %s: %w", skill, err)
+		}
+		result.SkillsRemoved = append(result.SkillsRemoved, skill)
+	}
+
+	// Remove prompt templates
+	for _, prompt := range promptsToRemove {
+		path := filepath.Join(promptsDir, prompt)
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("removing prompt %s: %w", prompt, err)
+		}
+		result.PromptsRemoved = append(result.PromptsRemoved, prompt)
+	}
+
+	return result, nil
+}
+
+// discoverGaggimateSkills returns subdirectories in dir that start with "gaggimate-".
+func discoverGaggimateSkills(dir string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+
+	var found []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if !strings.HasPrefix(entry.Name(), "gaggimate-") {
+			continue
+		}
+		// Verify it contains SKILL.md
+		skillMd := filepath.Join(dir, entry.Name(), "SKILL.md")
+		if _, err := os.Stat(skillMd); os.IsNotExist(err) {
+			continue
+		}
+		found = append(found, entry.Name())
+	}
+	return found
+}
+
+// discoverGaggimatePrompts returns files in dir that start with "gaggimate-" and end with .md.
+func discoverGaggimatePrompts(dir string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+
+	var found []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasPrefix(name, "gaggimate-") && strings.HasSuffix(name, ".md") {
+			found = append(found, name)
+		}
+	}
+	return found
+}
+
 // copyFile copies a single file.
 func copyFile(src, dst string) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {

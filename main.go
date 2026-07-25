@@ -57,6 +57,8 @@ func main() {
 		cmdDiagnose(httpClient, host)
 	case "install":
 		cmdInstall(args)
+	case "uninstall":
+		cmdUninstall(args)
 	case "version", "--version", "-v":
 		fmt.Printf("gaggimate-cli %s\n", version)
 	case "help", "--help", "-h":
@@ -88,6 +90,7 @@ COMMANDS
     notes set <SHOT_ID> [flags]            Set shot notes
     diagnose                               Check device connectivity
     install --harness <NAME> [flags]       Install skills & instructions for a harness
+    uninstall --harness <NAME> [flags]     Remove installed skills & prompt templates
     version                                Print version
 
 ANALYSIS DETAIL LEVELS (--detail)
@@ -180,6 +183,21 @@ INSTALL
       --local                 Install to project directory instead of global config
       --skills-only           Only install skills, skip prompt templates
       --instructions-only     Only install prompt templates, skip skills
+
+  UNINSTALL
+    Removes previously installed gaggimate skills and prompt templates.
+    Only gaggimate-* files are removed — other skills/prompts are untouched.
+    You will be shown a list of items to remove and asked to confirm.
+
+    Examples:
+      gaggimate-cli uninstall --harness pi              # uninstall globally from Pi
+      gaggimate-cli uninstall --harness pi --local      # uninstall from .pi/ in this project
+      gaggimate-cli uninstall --harness pi --dry-run    # preview without removing
+
+    Flags:
+      --harness NAME          Target harness: pi, claude, codex, cursor (required)
+      --local                 Uninstall from project directory instead of global config
+      --dry-run               Preview what would be removed without deleting
 `)
 }
 
@@ -415,6 +433,107 @@ func cmdNotes(ws *api.WebSocketClient, args []string) {
 }
 
 // ─── Install ──────────────────────────────────────────────────────
+
+func cmdUninstall(args []string) {
+	harness := ""
+	projectLocal := false
+	dryRun := false
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--harness":
+			if i+1 < len(args) {
+				harness = args[i+1]
+				i++
+			}
+		case "--local":
+			projectLocal = true
+		case "--dry-run":
+			dryRun = true
+		}
+	}
+
+	if harness == "" {
+		fmt.Fprintln(os.Stderr, "Error: --harness is required")
+		fmt.Fprintln(os.Stderr, "Available harnesses: pi, claude, codex, cursor")
+		os.Exit(1)
+	}
+
+	// First pass: discover what would be removed (no confirmation yet)
+	u := &install.Uninstall{
+		HarnessName:  harness,
+		ProjectLocal: projectLocal,
+		DryRun:       true,
+		Confirm:      nil, // skip confirmation for dry run
+	}
+	dryResult, err := u.Run()
+	if err != nil {
+		fatal("%v", err)
+	}
+
+	if len(dryResult.SkillsRemoved) == 0 && len(dryResult.PromptsRemoved) == 0 {
+		harnessInfo := install.Harnesses[harness]
+		fmt.Printf("Nothing to uninstall for %s (%s)\n", harnessInfo.Name, harnessInfo.Description)
+		return
+	}
+
+	// Show what will be removed
+	harnessInfo := install.Harnesses[harness]
+	scope := "global"
+	if projectLocal {
+		scope = "project-local"
+	}
+
+	fmt.Printf("The following will be removed from %s (%s, %s):\n\n", harnessInfo.Name, harnessInfo.Description, scope)
+
+	if len(dryResult.SkillsRemoved) > 0 {
+		fmt.Printf("Skills (from %s):\n", dryResult.SkillsDir)
+		for _, s := range dryResult.SkillsRemoved {
+			fmt.Printf("  ✗ %s\n", s)
+		}
+		fmt.Println()
+	}
+
+	if len(dryResult.PromptsRemoved) > 0 {
+		fmt.Printf("Prompt templates (from %s):\n", dryResult.PromptsDir)
+		for _, p := range dryResult.PromptsRemoved {
+			fmt.Printf("  ✗ /%s\n", strings.TrimSuffix(p, ".md"))
+		}
+		fmt.Println()
+	}
+
+	// If --dry-run, stop here
+	if dryRun {
+		fmt.Println("(dry run — nothing was removed)")
+		return
+	}
+
+	// Ask for confirmation
+	fmt.Print("Proceed with uninstall? [y/N] ")
+	var answer string
+	fmt.Scanln(&answer)
+	answer = strings.TrimSpace(strings.ToLower(answer))
+	if answer != "y" && answer != "yes" {
+		fmt.Println("Uninstall cancelled.")
+		return
+	}
+
+	// Second pass: actually remove
+	u2 := &install.Uninstall{
+		HarnessName:  harness,
+		ProjectLocal: projectLocal,
+		DryRun:       false,
+		Confirm:      nil, // already confirmed above
+	}
+	result, err := u2.Run()
+	if err != nil {
+		fatal("%v", err)
+	}
+
+	count := len(result.SkillsRemoved) + len(result.PromptsRemoved)
+	fmt.Printf("\nRemoved %d item(s).\n", count)
+	fmt.Println("Restart your agent to unload the removed skills and prompts.")
+}
 
 func cmdInstall(args []string) {
 	harness := ""
