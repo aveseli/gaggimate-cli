@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adnan/gaggimate-cli/internal/parser"
+	"github.com/aveseli/gaggimate-cli/internal/parser"
 )
 
 // Detail levels

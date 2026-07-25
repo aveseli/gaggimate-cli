@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/adnan/gaggimate-cli/internal/parser"
+	"github.com/aveseli/gaggimate-cli/internal/parser"
 )
 
 // HTTPClient communicates with the Gaggimate device over HTTP.

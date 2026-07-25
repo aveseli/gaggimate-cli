@@ -20,9 +20,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adnan/gaggimate-cli/internal/api"
-	"github.com/adnan/gaggimate-cli/internal/diag"
-	"github.com/adnan/gaggimate-cli/internal/install"
+	"github.com/aveseli/gaggimate-cli/internal/api"
+	"github.com/aveseli/gaggimate-cli/internal/diag"
+	"github.com/aveseli/gaggimate-cli/internal/install"
 )
 
 const version = "0.1.0"

@@ -1,4 +1,4 @@
-module github.com/adnan/gaggimate-cli
+module github.com/aveseli/gaggimate-cli
 
 go 1.26.5
 
