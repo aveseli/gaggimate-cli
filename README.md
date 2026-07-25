@@ -4,6 +4,39 @@ CLI tool for interacting with a Gaggimate espresso machine. Built in Go for agen
 
 ## Installation
 
+### Quick Install (recommended)
+
+Download a pre-built binary for your platform:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/aveseli/gaggimate-cli/main/install.sh | bash
+```
+
+Or download and run locally:
+
+```bash
+curl -fsSL -o install.sh https://raw.githubusercontent.com/aveseli/gaggimate-cli/main/install.sh
+bash install.sh
+```
+
+The script:
+1. Detects your OS and architecture (Linux/macOS/Windows, amd64/arm64)
+2. Downloads the latest release binary
+3. Installs it to `~/.local/bin`
+4. Checks if `~/.local/bin` is in your `PATH` and tells you how to add it if not
+
+Binaries are available for:
+
+| Platform | Binary |
+|----------|--------|
+| Linux x86_64 | `gaggimate-linux-amd64` |
+| Linux ARM64 | `gaggimate-linux-arm64` |
+| macOS Intel | `gaggimate-darwin-amd64` |
+| macOS Apple Silicon | `gaggimate-darwin-arm64` |
+| Windows x86_64 | `gaggimate-windows-amd64.exe` |
+
+### Build from Source
+
 ```bash
 cd gaggimate-cli
 go build -o gaggimate .
@@ -70,6 +103,21 @@ gaggimate profiles delete <PROFILE_ID>  # AI profiles only
 gaggimate notes get <SHOT_ID>
 gaggimate notes set <SHOT_ID> --rating 4 --notes "sweet, balanced" \
     --balance balanced --grind 12 --dose-in 18 --dose-out 36
+```
+
+### `install` / `uninstall` — Agent Skills
+
+```bash
+# Install skills and prompt templates into a coding agent
+
+# Uninstall — shows what will be removed, asks for confirmation
+
+gaggimate install --harness pi                # Install globally for Pi
+gaggimate install --harness pi --local        # Install to .pi/ in this project
+gaggimate install --harness claude            # Install for Claude Desktop
+
+gaggimate uninstall --harness pi              # Remove installed skills/prompts
+gaggimate uninstall --harness pi --dry-run    # Preview without removing
 ```
 
 ### `diagnose` — Connectivity Check
