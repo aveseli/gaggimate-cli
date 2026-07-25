@@ -22,6 +22,29 @@ This installs:
 - The Gaggimate device is on the same network as the CLI
 - Set `GAGGIMATE_HOST` env var if not using `gaggimate.local`
 
+## CI/CD: Building Releases
+
+Pushing a version tag triggers GitHub Actions to cross-compile binaries and publish a GitHub Release.
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+**Build matrix:**
+
+| Platform | Binary |
+|----------|--------|
+| Linux x86_64 | `gaggimate-linux-amd64` |
+| Linux ARM64 | `gaggimate-linux-arm64` |
+| macOS Intel | `gaggimate-darwin-amd64` |
+| macOS Apple Silicon | `gaggimate-darwin-arm64` |
+| Windows x86_64 | `gaggimate-windows-amd64.exe` |
+
+**Workflow:** `.github/workflows/release.yml`
+
+Binaries are built with `-trimpath -ldflags="-s -w"` and `CGO_ENABLED=0` for fully static, stripped builds. The release includes auto-generated release notes.
+
 ## Quick Reference
 
 ```bash
