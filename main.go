@@ -14,6 +14,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -23,9 +24,14 @@ import (
 	"github.com/aveseli/gaggimate-cli/internal/api"
 	"github.com/aveseli/gaggimate-cli/internal/diag"
 	"github.com/aveseli/gaggimate-cli/internal/install"
+	"github.com/aveseli/gaggimate-cli/internal/update"
 )
 
-const version = "0.1.0"
+var version = "0.1.0"
+
+func init() {
+	update.CurrentVersion = version
+}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -59,6 +65,8 @@ func main() {
 		cmdInstall(args)
 	case "uninstall":
 		cmdUninstall(args)
+	case "update":
+		cmdUpdate(args)
 	case "version", "--version", "-v":
 		fmt.Printf("gaggimate-cli %s\n", version)
 	case "help", "--help", "-h":
@@ -91,6 +99,7 @@ COMMANDS
     diagnose                               Check device connectivity
     install --harness <NAME> [flags]       Install skills & instructions for a harness
     uninstall --harness <NAME> [flags]     Remove installed skills & prompt templates
+    update [--force]                       Update to the latest release
     version                                Print version
 
 ANALYSIS DETAIL LEVELS (--detail)
@@ -633,6 +642,57 @@ func cmdInstall(args []string) {
 	}
 
 	fmt.Println("Restart your agent to load the new skills and prompts.")
+}
+
+// ─── Update ──────────────────────────────────────────────────────
+
+func cmdUpdate(args []string) {
+	force := false
+	for _, arg := range args {
+		if arg == "--force" || arg == "-f" {
+			force = true
+		}
+	}
+
+	current := update.CurrentVersion
+	if current == "dev" {
+		fatal("cannot update a development build. install from source or use the install script instead.")
+	}
+
+	fmt.Printf("Current version: %s\n", current)
+	fmt.Println("Checking for updates...")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	latest, err := update.CheckLatest(client)
+	if err != nil {
+		fatal("checking for updates: %v", err)
+	}
+
+	fmt.Printf("Latest version:  %s\n", latest)
+
+	if latest == current && !force {
+		fmt.Println("\nAlready up to date.")
+		return
+	}
+
+	if latest != current {
+		fmt.Printf("\nUpdating %s → %s...\n", current, latest)
+	} else {
+		fmt.Println("\nReinstalling current version (--force)...")
+	}
+
+	selfPath, err := update.SelfPath()
+	if err != nil {
+		fatal("%v", err)
+	}
+
+	fmt.Printf("Binary: %s\n", selfPath)
+
+	if err := update.Download(client, latest, selfPath); err != nil {
+		fatal("downloading update: %v", err)
+	}
+
+	fmt.Printf("\n✓ Updated to %s\n", latest)
 }
 
 // ─── Diagnose ─────────────────────────────────────────────────────

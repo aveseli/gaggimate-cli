@@ -25,8 +25,15 @@ gaggimate-cli uninstall --harness pi --dry-run # Preview what would be removed
 ```
 
 Uninstall only removes `gaggimate-*` items — other skills and prompts are untouched. You will be shown a list of items to remove and asked to confirm before anything is deleted.
-- **6 skills** (gaggimate-core, gaggimate-diagnose, gaggimate-feedback, gaggimate-profiles, gaggimate-knowledge, gaggimate-new-coffee)
-- **4 prompt templates** (Pi only: /gaggimate-analyze-shot, /gaggimate-dial-in, /gaggimate-new-coffee, /gaggimate-shot-feedback)
+
+### Update gaggimate-cli
+
+```bash
+gaggimate-cli update              # Update to the latest release
+gaggimate-cli update --force      # Reinstall current version
+```
+
+Checks GitHub for the latest release, downloads the binary for your OS/architecture, and replaces the current binary in-place.
 
 ### Prerequisites
 

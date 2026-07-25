@@ -86,7 +86,7 @@ download_binary() {
     tmp_dir=$(mktemp -d)
     local tmp_file="${tmp_dir}/${binary}"
 
-    info "Downloading ${binary} v${version}..."
+    info "Downloading ${binary} v${version}..." >&2
     if command -v curl &>/dev/null; then
         curl -fsSL -o "$tmp_file" "$url" || err "Download failed. Check your connection and try again."
     elif command -v wget &>/dev/null; then

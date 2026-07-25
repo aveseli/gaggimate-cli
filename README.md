@@ -120,6 +120,15 @@ gaggimate uninstall --harness pi              # Remove installed skills/prompts
 gaggimate uninstall --harness pi --dry-run    # Preview without removing
 ```
 
+### `update` — Self-Update
+
+```bash
+gaggimate update              # Update to the latest release
+gaggimate update --force      # Reinstall current version
+```
+
+Checks the latest release on GitHub, downloads the binary for your platform, and replaces the current binary in-place.
+
 ### `diagnose` — Connectivity Check
 
 ```bash
