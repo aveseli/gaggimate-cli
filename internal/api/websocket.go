@@ -159,6 +159,50 @@ func (c *WebSocketClient) SelectProfile(id string) error {
 	return err
 }
 
+// CreateProfile creates a new profile on the device. Returns the new profile ID.
+func (c *WebSocketClient) CreateProfile(profile Profile) (string, error) {
+	// Build the payload with all profile fields
+	payload := map[string]interface{}{
+		"label":       profile.Label,
+		"type":        profile.Type,
+		"description": profile.Description,
+		"temperature": profile.Temperature,
+		"phases":      profile.Phases,
+	}
+
+	resp, err := c.sendRequest("req:profiles:create", payload)
+	if err != nil {
+		return "", err
+	}
+
+	// The response should contain the new profile with its ID
+	var created Profile
+	if err := json.Unmarshal(resp.Profile, &created); err != nil {
+		// If no profile returned, try to extract ID from response message
+		if resp.Msg != "" {
+			return resp.Msg, nil
+		}
+		return "", fmt.Errorf("parsing created profile: %w", err)
+	}
+
+	return created.ID, nil
+}
+
+// UpdateProfile updates an existing profile on the device.
+func (c *WebSocketClient) UpdateProfile(id string, profile Profile) error {
+	payload := map[string]interface{}{
+		"id":          id,
+		"label":       profile.Label,
+		"type":        profile.Type,
+		"description": profile.Description,
+		"temperature": profile.Temperature,
+		"phases":      profile.Phases,
+	}
+
+	_, err := c.sendRequest("req:profiles:update", payload)
+	return err
+}
+
 // ShotNotes represents notes for a shot.
 type ShotNotes struct {
 	Rating       *int     `json:"rating,omitempty"`

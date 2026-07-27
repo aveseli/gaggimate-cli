@@ -97,6 +97,43 @@ gaggimate profiles select <PROFILE_ID>
 gaggimate profiles delete <PROFILE_ID>  # AI profiles only
 ```
 
+#### Create a Profile
+
+```bash
+# From a JSON file
+gaggimate profiles create --file profile.json
+
+# From inline JSON
+gaggimate profiles create --json '{"label":"My Profile","type":"pro",...}'
+
+# From stdin
+cat profile.json | gaggimate profiles create
+```
+
+The profile JSON is validated before upload. Required fields: `label`, `type` (simple/pro), `temperature`, and `phases` array. AI-created profiles automatically get an `[AI]` suffix.
+
+#### Update a Profile
+
+```bash
+# Update from file
+gaggimate profiles update <PROFILE_ID> --file profile.json
+
+# Update from inline JSON
+gaggimate profiles update <PROFILE_ID> --json '{...}'
+
+# From stdin
+cat profile.json | gaggimate profiles update <PROFILE_ID>
+```
+
+#### Export a Profile
+
+```bash
+gaggimate profiles export <PROFILE_ID>  # Outputs formatted JSON
+
+# Save to file
+gaggimate profiles export <PROFILE_ID> > profile.json
+```
+
 ### `notes` — Shot Notes
 
 ```bash

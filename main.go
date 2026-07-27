@@ -24,6 +24,7 @@ import (
 	"github.com/aveseli/gaggimate-cli/internal/api"
 	"github.com/aveseli/gaggimate-cli/internal/diag"
 	"github.com/aveseli/gaggimate-cli/internal/install"
+	"github.com/aveseli/gaggimate-cli/internal/profile"
 	"github.com/aveseli/gaggimate-cli/internal/update"
 )
 
@@ -94,6 +95,9 @@ COMMANDS
     profiles get <ID>                      Get a profile by ID
     profiles select <ID>                   Select active profile
     profiles delete <ID>                   Delete an AI-created profile
+    profiles create [--file F | --json J]  Create a new profile from JSON
+    profiles update <ID> [--file F | --json J]  Update an existing profile
+    profiles export <ID>                   Export profile to JSON
     notes get <SHOT_ID>                    Get shot notes
     notes set <SHOT_ID> [flags]            Set shot notes
     diagnose                               Check device connectivity
@@ -310,7 +314,7 @@ func cmdShotsGet(http *api.HTTPClient, args []string) {
 
 func cmdProfiles(ws *api.WebSocketClient, args []string) {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "Usage: gaggimate-cli profiles <list|get|select|delete> [args]")
+		fmt.Fprintln(os.Stderr, "Usage: gaggimate-cli profiles <list|get|select|delete|create|update|export> [args]")
 		os.Exit(1)
 	}
 
@@ -362,10 +366,170 @@ func cmdProfiles(ws *api.WebSocketClient, args []string) {
 		}
 		fmt.Printf("Profile '%s' deleted\n", profile.Label)
 
+	case "create":
+		cmdProfilesCreate(ws, args[1:])
+
+	case "update":
+		cmdProfilesUpdate(ws, args[1:])
+
+	case "export":
+		cmdProfilesExport(ws, args[1:])
+
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown profiles subcommand: %s\n", sub)
 		os.Exit(1)
 	}
+}
+
+func cmdProfilesCreate(ws *api.WebSocketClient, args []string) {
+	var filePath string
+	var jsonStr string
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--file":
+			if i+1 < len(args) {
+				filePath = args[i+1]
+				i++
+			}
+		case "--json":
+			if i+1 < len(args) {
+				jsonStr = args[i+1]
+				i++
+			}
+		}
+	}
+
+	var data []byte
+	var err error
+
+	if filePath != "" {
+		data, err = profile.LoadProfileFromFile(filePath)
+		if err != nil {
+			fatal("loading profile from file: %v", err)
+		}
+	} else if jsonStr != "" {
+		data = []byte(jsonStr)
+		if _, err := profile.ValidateProfile(data); err != nil {
+			fatal("invalid profile: %v", err)
+		}
+	} else {
+		// Try reading from stdin if not a terminal
+		if stat, _ := os.Stdin.Stat(); (stat.Mode() & os.ModeCharDevice) == 0 {
+			data, err = profile.LoadProfileFromFile("-")
+			if err != nil {
+				fatal("reading profile from stdin: %v", err)
+			}
+		} else {
+			fmt.Fprintln(os.Stderr, "Usage: gaggimate-cli profiles create --file profile.json")
+			fmt.Fprintln(os.Stderr, "       gaggimate-cli profiles create --json '{...}'")
+			fmt.Fprintln(os.Stderr, "       cat profile.json | gaggimate-cli profiles create")
+			os.Exit(1)
+		}
+	}
+
+	var profileData api.Profile
+	if err := json.Unmarshal(data, &profileData); err != nil {
+		fatal("parsing profile: %v", err)
+	}
+
+	// Ensure AI suffix if not present
+	if !strings.HasSuffix(profileData.Label, " [AI]") {
+		profileData.Label += " [AI]"
+	}
+
+	id, err := ws.CreateProfile(profileData)
+	if err != nil {
+		fatal("creating profile: %v", err)
+	}
+
+	fmt.Printf("Profile created with ID: %s\n", id)
+	fmt.Printf("Label: %s\n", profileData.Label)
+}
+
+func cmdProfilesUpdate(ws *api.WebSocketClient, args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Usage: gaggimate-cli profiles update <PROFILE_ID> [--file profile.json | --json '{...}']")
+		os.Exit(1)
+	}
+
+	profileID := args[0]
+	var filePath string
+	var jsonStr string
+
+	for i := 1; i < len(args); i++ {
+		switch args[i] {
+		case "--file":
+			if i+1 < len(args) {
+				filePath = args[i+1]
+				i++
+			}
+		case "--json":
+			if i+1 < len(args) {
+				jsonStr = args[i+1]
+				i++
+			}
+		}
+	}
+
+	var data []byte
+	var err error
+
+	if filePath != "" {
+		data, err = profile.LoadProfileFromFile(filePath)
+		if err != nil {
+			fatal("loading profile from file: %v", err)
+		}
+	} else if jsonStr != "" {
+		data = []byte(jsonStr)
+		if _, err := profile.ValidateProfile(data); err != nil {
+			fatal("invalid profile: %v", err)
+		}
+	} else {
+		// Try reading from stdin if not a terminal
+		if stat, _ := os.Stdin.Stat(); (stat.Mode() & os.ModeCharDevice) == 0 {
+			data, err = profile.LoadProfileFromFile("-")
+			if err != nil {
+				fatal("reading profile from stdin: %v", err)
+			}
+		} else {
+			fmt.Fprintln(os.Stderr, "Usage: gaggimate-cli profiles update <PROFILE_ID> --file profile.json")
+			fmt.Fprintln(os.Stderr, "       gaggimate-cli profiles update <PROFILE_ID> --json '{...}'")
+			fmt.Fprintln(os.Stderr, "       cat profile.json | gaggimate-cli profiles update <PROFILE_ID>")
+			os.Exit(1)
+		}
+	}
+
+	var profileData api.Profile
+	if err := json.Unmarshal(data, &profileData); err != nil {
+		fatal("parsing profile: %v", err)
+	}
+
+	if err := ws.UpdateProfile(profileID, profileData); err != nil {
+		fatal("updating profile: %v", err)
+	}
+
+	fmt.Printf("Profile %s updated\n", profileID)
+}
+
+func cmdProfilesExport(ws *api.WebSocketClient, args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Usage: gaggimate-cli profiles export <PROFILE_ID>")
+		os.Exit(1)
+	}
+
+	profile, err := ws.GetProfile(args[0])
+	if err != nil {
+		fatal("getting profile %s: %v", args[0], err)
+	}
+
+	// Marshal with indentation for readability
+	data, err := json.MarshalIndent(profile, "", "  ")
+	if err != nil {
+		fatal("marshaling profile: %v", err)
+	}
+
+	fmt.Println(string(data))
 }
 
 // ─── Notes Commands ───────────────────────────────────────────────
