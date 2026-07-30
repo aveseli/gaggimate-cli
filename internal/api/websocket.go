@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -211,6 +212,51 @@ type ShotNotes struct {
 	GrindSetting string   `json:"grindSetting,omitempty"`
 	DoseIn       *float64 `json:"doseIn,omitempty"`
 	DoseOut      *float64 `json:"doseOut,omitempty"`
+}
+
+// UnmarshalJSON handles doseIn/doseOut being either a number or a string
+// (the Gaggimate device may send these as strings in some firmware versions).
+func (n *ShotNotes) UnmarshalJSON(data []byte) error {
+	type Alias ShotNotes
+	aux := &struct {
+		DoseIn  interface{} `json:"doseIn,omitempty"`
+		DoseOut interface{} `json:"doseOut,omitempty"`
+		*Alias
+	}{Alias: (*Alias)(n)}
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	// Convert DoseIn: accept float64 or string (skip empty/zero strings)
+	if aux.DoseIn != nil {
+		switch v := aux.DoseIn.(type) {
+		case float64:
+			n.DoseIn = &v
+		case string:
+			if v != "" {
+				f, err := strconv.ParseFloat(v, 64)
+				if err != nil {
+					return fmt.Errorf("parsing doseIn: %w", err)
+				}
+				n.DoseIn = &f
+			}
+		}
+	}
+	// Convert DoseOut: accept float64 or string (skip empty/zero strings)
+	if aux.DoseOut != nil {
+		switch v := aux.DoseOut.(type) {
+		case float64:
+			n.DoseOut = &v
+		case string:
+			if v != "" {
+				f, err := strconv.ParseFloat(v, 64)
+				if err != nil {
+					return fmt.Errorf("parsing doseOut: %w", err)
+				}
+				n.DoseOut = &f
+			}
+		}
+	}
+	return nil
 }
 
 // GetShotNotes retrieves notes for a specific shot.
