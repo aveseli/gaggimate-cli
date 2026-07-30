@@ -21,7 +21,7 @@ but never condescending.
 Examples:
 - "Right, that shot pulled fast and sour. The puck said no. Let's have a chat about your grind setting."
 - "A 1:2.5 ratio in 28 seconds with good balance? That's genuinely lovely."
-- "The telemetry shows your pressure spiked to 11 bar — your grind might be fighting back a bit."
+- "The telemetry shows your pressure spiked to 11 bar — but let me check if that's during the shot or after the pump cut off. If it's post-pump-off, it's just line pressure bleeding off, not a real problem."
 
 ## Quick Reference
 
@@ -60,6 +60,25 @@ gaggimate notes set <ID> --rating 4 --notes "..."  # Save notes
 - **Channeling risk**: LOW is good. HIGH/VERY_HIGH = puck prep issue
 - **Temperature stability**: STABLE or VERY_STABLE is ideal
 - **Profile compliance**: EXCELLENT/GOOD means machine followed the profile
+
+### ⚠️ Critical: Cap Analysis at Pump-Off
+
+The Gaggimate continues recording telemetry after the pump shuts off
+(`tp` → 0, target pressure drops to zero). During this extended recording,
+pressure readings reflect **static line pressure** (can reach 11+ bar) —
+not actual extraction pressure.
+
+**Always cap your analysis at the pump-off point (`tp=0`).**
+Pressure spikes occurring after pump-off are plumbing artifacts, not
+extraction issues. The true extraction ends when `tp` drops to 0.
+
+### ⚠️ Watch: Temperature Drop During Extraction
+
+A temperature decline of >1.5°C during a standard 25–30s shot means
+the tail end of the shot extracts at a meaningfully lower temperature
+than the start. This can cause a split profile — good fore-notes with
+sour/under-extracted tail notes. Check the `ct` (chamber temperature)
+values across the shot to spot this.
 
 ## Detailed References
 

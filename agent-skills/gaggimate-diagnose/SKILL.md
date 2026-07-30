@@ -93,7 +93,23 @@ Load the telemetry patterns file and see the Style Detection Fingerprints sectio
 Use: read_knowledge(action="read", filename="diagnostics/TELEMETRY_PATTERNS")
 ```
 
-### 2. ANALYZE Telemetry
+### 2. ANALYZE Telemetry — Cap Data at Pump-Off
+
+**⚠️ CRITICAL: The raw telemetry includes extended recording AFTER the pump shuts off.**
+During this post-shot phase, pressure readings reflect **static line pressure** (can reach
+11+ bar) as water bleeds off — not actual extraction pressure. Always cap your analysis at
+the pump-off point.
+
+**How to find pump-off:**
+- Look for `tp=0` (target pressure drops to 0) in the raw telemetry samples — this is when
+the machine signals the shot is done (volumetric target met or timeout).
+- A sample or two after `tp=0`, `pf` (pump frequency) also drops to 0 as the pump spins down.
+- Everything after `tp=0` is post-extration: pressure spikes are plumbing artifacts, scale
+readings continue accumulating from residual dripping.
+
+**Why it matters:** A shot that appears to have 11 bar spikes may actually have perfect
+8.96–9.01 bar average pressure during the active extraction. The 11 bar readings are
+entirely post-pump-off artifacts.
 
 **Determine the final weight.** Prefer telemetry data — load `read_knowledge(action="read", filename="diagnostics/TELEMETRY_PATTERNS")` for scale artifact detection and estimation methods. If telemetry is unavailable or looks unreliable (spikes, drops to 0g, nulls), ask the user for the actual weight.
 State the dose out you're using and how you derived it, then move on.
@@ -105,9 +121,11 @@ State the dose out you're using and how you derived it, then move on.
 | Metric | Normal | Anomaly |
 |--------|--------|---------|
 | Temperature variance | ±1°C from target | >2°C = equipment instability |
+| Temperature drop during shot | <1.5°C | >1.5°C drop = tail end extracts colder, risking sourness |
 | Pressure spike above profile target | — | >1.0 bar above = almost certainly too fine / channeling (>0.5 unusual) |
 
 Flag an anomaly only when a metric falls **outside the identified style's expected range**.
+**Do not flag pressure readings from after pump-off (`tp=0`).**
 
 ### 2b. COMPARE Intended vs Actual (when profile definition available)
 
@@ -131,14 +149,20 @@ when target pressure/flow data is in the shot. Key fields:
 |------------|----------------|
 | `max_flow_overshoot_ml_s` > 0.7 | Grind too coarse — flow significantly above target (strongest grind signal) |
 | `max_flow_undershoot_ml_s` > 0.7 | Grind too fine — flow significantly below target (strongest grind signal) |
-| `max_pressure_overshoot_bar` > 1.0 | Grind too fine — machine can't push water through puck (>0.5 already unusual) |
+| `max_pressure_overshoot_bar` > 1.0 | Verify this isn't post-pump-off artifact first. If during active extraction: grind too fine |
 | `max_pressure_undershoot_bar` > 1.0 (non-bloom context) | Grind too coarse |
 | `pressure_rmse_bar` annotation POOR | Profile not being followed — check grind, dose, or profile params |
-| Pressure exceeded target by >1.0 bar | Grind too fine or dose too high (highly unusual overshoot) |
+| Pressure exceeded target by >1.0 bar (during active extraction) | Grind too fine or dose too high |
 | Pressure never reached target (>1.0 bar below) | Context-dependent: normal for post-bloom ramps, too coarse for non-bloom |
 | Volumetric target reached much earlier than phase duration | Grind too coarse (flow too fast) |
 | Volumetric target not reached within phase duration | Grind too fine (flow too slow) |
 | Decline phase pressure stayed >1 bar above target floor | Grind too fine — high puck resistance |
+
+> **Temperature drop warning:** A temperature decline of >1.5°C during a standard
+> 25–30s extraction means the last ~10g of espresso extracts at a meaningfully lower
+> temperature than the first ~10g. This can produce a split profile — well-extracted
+> fore-notes with sour/under-extracted tail notes. If the user reports "sour but only
+> in the finish," check the temperature drop across the shot.
 
 ### 3. CORRELATE Taste with Telemetry
 
